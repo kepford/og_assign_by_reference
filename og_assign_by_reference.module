@@ -1,0 +1,114 @@
+<?php
+// $Id$
+
+/**
+ * Implementation of hook_action_info().
+ */
+function og_assign_by_reference_action_info() {
+  $actions = array(
+    'og_assign_by_reference_action_add_group_action' => array(
+      'type' => 'node',
+      'description' => t('Add post to the groups specified by the values in a nodereference field.'),
+      'behavior' => array('changes_node_property'), // For Views Bulk Operations module
+      'configurable' => TRUE,
+      'hooks' => array(
+        'nodeapi' => array('insert'),
+      ),
+    ),
+  );
+
+  return $actions;
+}
+
+/**
+ * A configurable action to add a node to specific groups in organic groups based
+ * on the value of a given nodereference field.
+ *
+ * Requires actions.module.
+ */
+function og_assign_by_reference_action_add_group_action(&$node, $context) {
+  if (isset($context['fields'])) {
+    $gids = array();
+    foreach ($context['fields'] as $field_name => $field_description) {
+      // Dig the group ids out of $node->{$field_name}.
+      if (isset($node->{$field_name})) {
+        foreach ($node->{$field_name} as $field) {
+          $gid = $field['nid'];
+          $gids[$gid] = $gid;
+        }
+      }
+    }
+    if (!empty($gids)) {
+      $node->og_public = $context['make_public'];
+      $node->og_groups[$gid] = $gid;
+      $assigned_to_groups = TRUE;
+      watchdog('action', 'Assigned new node/%id to group id(s) %groups.', array('%id' => intval($node->nid), '%groups' => implode(',', $gids)));
+    }
+  }
+}
+
+/**
+ * Configuration form for action og_assign_by_reference_action_add_group_action.
+ */
+function og_assign_by_reference_action_add_group_action_form($context) {
+  if (!isset($context['fields'])) {
+    $context['fields'] = array();
+  }
+
+  $fields = og_assign_by_reference_action_get_nodereference_fields();
+  if (count($fields)) {
+    $form = array();
+    $form['fields'] = array(
+      '#type' => 'select',
+      '#title' => t('Fields'),
+      '#options' => $fields,
+      '#description' => t('Select the nodereference field(s) that hold the groups to add to the node.'),
+      '#default_value' => $context['fields'],
+      '#required' => TRUE,
+      '#multiple' => TRUE,
+    );
+
+    $form['make_public'] = array(
+      '#type' => 'checkbox',
+      '#title' => t('Make nodes public'),
+      '#description' => t('If OG access control is being used, should the nodes be public?  This sets the og_public value in the node.'),
+      '#default_value' => $context['make_public'],
+    );
+  }
+  else {
+    drupal_set_message(t('There are no configured nodereference fields in the system.'));
+  }
+  return $form;
+}
+
+function og_assign_by_reference_action_add_group_action_submit($form, &$form_state) {
+  return array(
+    'fields' => $form_state['values']['fields'],
+    'make_public' => $form_state['values']['make_public'],
+  );
+}
+
+/**
+ * Return list of nodereference fields keyed by the internal field name.
+ */
+function og_assign_by_reference_action_get_nodereference_fields() {
+  $type = content_types();
+  $fields = content_fields();
+  $field_types = _content_field_types();
+
+  $options = array();
+  foreach ($fields as $field) {
+    if (!isset($type['fields'][$field['field_name']]) && !$field['locked']) {
+      $field_type = $field_types[$field['type']];
+      if ($field['type'] == 'nodereference') {
+        $text = t('@field (@label)', array('@label' => t($field['widget']['label']), '@field' => $field['field_name']));
+        $options[$field['field_name']] = (drupal_strlen($text) > 80) ? truncate_utf8($text, 77) . '...' : $text;
+      }
+    }
+  }
+
+  // Sort the list by field name then by label.
+  asort($options);
+
+  return $options;
+}

@@ -1,0 +1,8 @@
+name = OG Assign by Reference
+description = "Provides actions that help assign nodes into groups based on the value of nodereference fields."
+package = "Organic groups"
+core = 6.x
+version = "6.x-0.2"
+dependencies[] = og
+dependencies[] = content
+dependencies[] = nodereference
